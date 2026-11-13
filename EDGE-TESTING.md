@@ -1,4 +1,4 @@
-# Edge MV3 diagnostic build (v1.3.2)
+# Edge MV3 diagnostic build (v1.3.3)
 
 **Purpose:** distinguish Cookie API failures from websites that authenticate using other
 storage or memory. Does **not** capture Discord authentication tokens or localStorage.
@@ -59,3 +59,15 @@ storage or memory. Does **not** capture Discord authentication tokens or localSt
   site is not restorable with Cookie-only backup. For Discord, this is expected.
 - If `auto_save` overwrites your old good snapshot, use **Import backup JSON**
   and disable automatic saving while investigating.
+
+## v1.3.3: Fix missing Last result in Options UI
+
+Previously, Options called `chrome.storage.local.get({auto_save:false,cookies:[]})`.
+This requests only those two keys, so `last_status` was always undefined even
+when a Save, Verify, or Restore operation had successfully persisted its result.
+The options view now explicitly requests `last_status` and a regression test
+simulates the key-selection behavior of the Chrome Storage API.
+
+It is expected that extension Options may open in a regular Edge window when
+invoked from InPrivate: Chrome/Edge extension's default spanning mode shares
+extension storage and allows access to the InPrivate cookie store once permitted.

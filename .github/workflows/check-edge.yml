@@ -14,6 +14,7 @@ jobs:
           node --check background.js
           node --check options.js
           python3 -m json.tool manifest.json >/dev/null
+          node .github/tests/options-status.cjs
       - name: Create Edge extension package
         run: |
           mkdir -p dist/edge
@@ -21,6 +22,6 @@ jobs:
           cp -r icons dist/edge/
       - uses: actions/upload-artifact@v4
         with:
-          name: Edge-InPrivate-Cookies-1.3.2
+          name: Edge-InPrivate-Cookies-1.3.3
           path: dist/edge/
           retention-days: 30

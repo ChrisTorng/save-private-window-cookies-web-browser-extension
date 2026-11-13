@@ -86,7 +86,7 @@ async function refresh(){
   const access=await chrome.permissions.contains({origins:['<all_urls>']});
   const storeId=allowed?await privateStore():null;
   const {auto_save=false,cookies=[],last_status}=await chrome.storage.local.get({
-    auto_save:false,cookies:[]});
+    auto_save:false,cookies:[],last_status:null});
   $('auto_save').checked=auto_save;
   $('auto_save').disabled=!(allowed&&access);
   $('save').disabled=!(allowed&&access&&storeId);
