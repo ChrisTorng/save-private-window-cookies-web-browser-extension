@@ -1,22 +1,26 @@
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-:root{color-scheme:light dark}body{font:14px system-ui,sans-serif;padding:12px;max-width:680px}
-button{margin:3px}#warning{font-weight:bold;color:#a55}
-#status{white-space:pre-wrap;word-break:break-word;font-size:12px}
-</style></head><body>
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root{color-scheme:light dark} body{font:14px system-ui,sans-serif;max-width:760px;padding:14px;line-height:1.6}
+button{margin:4px;padding:5px}#warning{color:#ba4646;font-weight:700}
+#status{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #8886;padding:10px}
+.small{font-size:12px;opacity:.8}</style></head><body>
+<h2>InPrivate Cookie Backup - Diagnostics</h2>
 <p id="warning"></p>
-<p><button type="button" id="save">Save cookies from InPrivate now</button>
+<p><button id="save">1. Save live cookies now</button>
 <label><input type="checkbox" id="auto_save"> Save automatically</label></p>
-<p><button type="button" id="delete">Delete stored backup</button>
-<button type="button" id="backup">Export JSON</button>
-<button type="button" id="restore">Import and restore JSON</button>
-<button type="button" id="refresh">Refresh diagnostics</button>
-<input type="file" accept=".json" id="file_input" hidden></p>
-<p>Stored cookies: <span id="cookie_count">-</span>,
-storage: <span id="storage_space_used">-</span> KB,
-InPrivate store ID: <span id="store_id">-</span></p>
-<h3>Last operation (no cookie values displayed)</h3><pre id="status">-</pre>
-<p><small>Cookie backups are stored persistently in chrome.storage.local.
-They are not encrypted by this extension. Import/restore may require reloading site tabs.
-Partitioned cookies (CHIPS) are not fully backed up by getAll without known partition keys.</small></p>
+<p><button id="verify">2. Verify saved vs live cookies</button>
+<button id="restore_saved">3. Restore saved cookies</button></p>
+<p><button id="backup">Export backup JSON (refresh first)</button>
+<button id="restore">Import backup JSON and restore</button>
+<input id="file_input" type="file" accept=".json" hidden></p>
+<p><button id="delete">Delete stored backup only</button>
+<button id="refresh">Refresh diagnostics</button></p>
+<p>Stored: <strong id="cookie_count">-</strong> cookies;
+storage: <span id="storage_space_used">-</span> KB;
+InPrivate cookie store: <span id="store_id">-</span></p>
+<h3>Last result (cookie values never shown)</h3><pre id="status">-</pre>
+<p class="small">A successful readback only proves cookie restoration, NOT website sign-in.
+This extension cannot restore localStorage, IndexedDB, memory-only authentication tokens,
+or server-revoked sessions. Partitioned cookies may not appear in a standard getAll result.
+Backups are stored unencrypted in your extension profile; exported JSON files may contain
+active credentials. Do not share these files.</p>
 <script src="options.js"></script></body></html>

@@ -1,126 +1,120 @@
-// Chromium MV3 implementation: event listeners are registered synchronously.
-// Incognito cookies are intentionally stored locally in the regular extension profile.
-let restoring = false;
+// Edge/Chromium MV3. No remote endpoints; cookie data stays in chrome.storage.local.
+// Listeners MUST be registered synchronously at the service-worker top level.
+let initializing = null;
 let saveQueue = Promise.resolve();
 
-async function privateWindows() {
-  return (await chrome.windows.getAll({populate: true})).filter(w => w.incognito);
-}
-
-async function privateStoreId() {
-  const windows = await privateWindows();
-  if (!windows.length) return null;
-  const ids = new Set(windows.flatMap(w => (w.tabs || []).map(t => t.id)));
+async function privateStore() {
+  const windows = (await chrome.windows.getAll({populate:true})).filter(w => w.incognito);
+  const tabIds = new Set(windows.flatMap(w => (w.tabs || []).map(t => t.id)));
+  if (!tabIds.size) return null;
   const stores = await chrome.cookies.getAllCookieStores();
-  const match = stores.find(store => store.tabIds.some(id => ids.has(id)));
-  return match ? match.id : null;
+  return stores.find(s => s.tabIds.some(id => tabIds.has(id)))?.id ?? null;
 }
-
-function cookieUrl(cookie) {
-  return (cookie.secure ? 'https://' : 'http://') +
-    cookie.domain.replace(/^\\./, '') + (cookie.path || '/');
+function urlFor(c) {
+  const host = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
+  return (c.secure ? 'https://' : 'http://') + host + (c.path || '/');
 }
-
-function cookieSetDetails(cookie, storeId) {
-  const details = {
-    url: cookieUrl(cookie), name: cookie.name, value: cookie.value,
-    path: cookie.path, secure: cookie.secure, httpOnly: cookie.httpOnly,
-    sameSite: cookie.sameSite, storeId
-  };
-  // Omitting domain preserves host-only cookies.
-  if (!cookie.hostOnly) details.domain = cookie.domain;
-  if (!cookie.session && typeof cookie.expirationDate === 'number') {
-    details.expirationDate = cookie.expirationDate;
-  }
-  if (cookie.partitionKey) details.partitionKey = cookie.partitionKey;
-  return details;
+function toSet(c, storeId) {
+  const d = {url:urlFor(c), storeId, name:c.name, value:c.value,
+    path:c.path || '/', secure:c.secure, httpOnly:c.httpOnly, sameSite:c.sameSite};
+  if (!c.hostOnly) d.domain = c.domain;
+  if (!c.session && typeof c.expirationDate === 'number') d.expirationDate = c.expirationDate;
+  if (c.partitionKey) d.partitionKey = c.partitionKey;
+  return d;
 }
-
-async function recordStatus(status) {
-  await chrome.storage.local.set({last_status: status});
+function cookieKey(c) {
+  return JSON.stringify([c.domain, c.path, c.name, c.partitionKey || null]);
 }
-
-async function saveSnapshot() {
-  if (restoring) return;
-  const {auto_save = false} = await chrome.storage.local.get({auto_save: false});
-  if (!auto_save || restoring) return;
-  const storeId = await privateStoreId();
-  if (!storeId || restoring) return;
-  const cookies = await chrome.cookies.getAll({storeId});
-  if (restoring) return;
-  // Never replace a good snapshot with an unexplained empty result.
-  const previous = await chrome.storage.local.get('cookies');
-  if (!cookies.length && (previous.cookies || []).length) {
-    await recordStatus({operation: 'save', error: 'Skipped empty snapshot', time: Date.now()});
-    return;
-  }
-  await chrome.storage.local.set({
-    cookies, last_status: {operation: 'save', count: cookies.length, time: Date.now(), storeId}
-  });
-}
-
-function queueSave() {
-  saveQueue = saveQueue.then(saveSnapshot).catch(async e => {
-    await recordStatus({operation: 'save', error: String(e), time: Date.now()});
-  });
-}
-
-async function restoreSnapshot() {
-  const storeId = await privateStoreId();
-  if (!storeId) {
-    await recordStatus({operation: 'restore', error: 'No InPrivate cookie store', time: Date.now()});
-    return;
-  }
-  const {cookies = []} = await chrome.storage.local.get({cookies: []});
-  if (!cookies.length) {
-    await recordStatus({operation: 'restore', error: 'No saved cookies', time: Date.now()});
-    return;
-  }
-  restoring = true;
-  let ok = 0, failed = 0;
-  const errors = [];
-  try {
-    for (const cookie of cookies) {
-      try {
-        const result = await chrome.cookies.set(cookieSetDetails(cookie, storeId));
-        if (result) ok++;
-        else {failed++; errors.push(cookie.domain + ': empty result');}
-      } catch (e) {
-        failed++;
-        if (errors.length < 8) errors.push(cookie.domain + ': ' + String(e));
-      }
+async function restoreCookies(cookies, storeId) {
+  let written=0, failed=0, expired=0;
+  const errors=[];
+  for (const c of cookies) {
+    if (c.expirationDate && c.expirationDate <= Date.now()/1000) {expired++; continue;}
+    try {
+      const result=await chrome.cookies.set(toSet(c,storeId));
+      if (result) written++;
+      else {failed++; if(errors.length<10) errors.push(c.domain+' / '+c.name+': no result');}
+    } catch(e) {
+      failed++;
+      if(errors.length<10) errors.push(c.domain+' / '+c.name+': '+String(e));
     }
-    await recordStatus({
-      operation: 'restore', time: Date.now(), storeId, total: cookies.length,
-      restored: ok, failed, errors
-    });
+  }
+  // Immediately read the target cookie store back; no values appear in logs.
+  const after=await chrome.cookies.getAll({storeId});
+  const byKey=new Map(after.map(c=>[cookieKey(c),c]));
+  let verified=0, mismatched=0;
+  for(const c of cookies) {
+    if(c.expirationDate && c.expirationDate<=Date.now()/1000) continue;
+    const got=byKey.get(cookieKey(c));
+    if(got && got.value===c.value) verified++;
+    else {mismatched++; if(errors.length<10) errors.push(c.domain+' / '+c.name+': readback mismatch');}
+  }
+  return {total:cookies.length, written, verified, failed, expired, mismatched, errors};
+}
+async function record(status) {
+  await chrome.storage.local.set({last_status:{...status,time:Date.now()}});
+}
+async function initializePrivate() {
+  const {privateInit=false}=await chrome.storage.session.get({privateInit:false});
+  if (privateInit) return;
+  const storeId=await privateStore();
+  if (!storeId) return; // window-created can fire before the first tab exists
+  await chrome.storage.session.set({privateInit:true,privateRestoring:true});
+  try {
+    const {cookies=[]}=await chrome.storage.local.get({cookies:[]});
+    if(cookies.length) await record({operation:'automatic restore',storeId,
+      ...await restoreCookies(cookies,storeId)});
+    else await record({operation:'automatic restore',storeId,error:'No saved cookie snapshot'});
+  } catch(e) {
+    await record({operation:'automatic restore',storeId,error:String(e)});
   } finally {
-    restoring = false;
+    await chrome.storage.session.set({privateRestoring:false});
   }
 }
-
-// MV3: NEVER register cookie-change listeners in a Promise callback or
-// conditional branch. The worker is stopped and started repeatedly.
-chrome.cookies.onChanged.addListener(change => {
-  if (restoring || change.cause === 'overwrite') return;
-  queueSave();
+function ensurePrivateInitialized() {
+  if(!initializing) initializing=initializePrivate().finally(()=>{initializing=null;});
+  return initializing;
+}
+async function saveSnapshot(changedStoreId) {
+  const {auto_save=false}=await chrome.storage.local.get({auto_save:false});
+  if(!auto_save) return;
+  const state=await chrome.storage.session.get({privateInit:false,privateRestoring:false});
+  if(!state.privateInit || state.privateRestoring) return;
+  const storeId=await privateStore();
+  if(!storeId || (changedStoreId && changedStoreId!==storeId)) return;
+  const cookies=await chrome.cookies.getAll({storeId});
+  const {cookies:old=[]}=await chrome.storage.local.get({cookies:[]});
+  if(!cookies.length && old.length) {
+    await record({operation:'automatic save',error:'Skipped empty snapshot'});
+    return;
+  }
+  await chrome.storage.local.set({cookies,last_status:{
+    operation:'automatic save',count:cookies.length,storeId,time:Date.now()}});
+}
+function scheduleSave(storeId) {
+  saveQueue=saveQueue.then(()=>saveSnapshot(storeId)).catch(e=>record({
+    operation:'automatic save',error:String(e)}));
+}
+chrome.cookies.onChanged.addListener(change=>{
+  // The store ID is checked within saveSnapshot; never inspect other-profile cookies.
+  scheduleSave(change.cookie.storeId);
 });
-
-chrome.windows.onCreated.addListener(async window => {
-  if (!window.incognito) return;
-  try {
-    if (!await chrome.extension.isAllowedIncognitoAccess()) return;
-    // Restore once when the first InPrivate window opens, not on every window.
-    const windows = await privateWindows();
-    if (windows.length === 1) await restoreSnapshot();
-  } catch (e) {
-    await recordStatus({operation: 'restore', error: String(e), time: Date.now()});
+chrome.windows.onCreated.addListener(w=>{
+  if(w.incognito) void ensurePrivateInitialized();
+});
+chrome.tabs.onCreated.addListener(tab=>{
+  if(tab.incognito) void ensurePrivateInitialized();
+});
+chrome.tabs.onUpdated.addListener((_tabId,_change,tab)=>{
+  if(tab.incognito) void ensurePrivateInitialized();
+});
+chrome.windows.onRemoved.addListener(async()=>{
+  if(!(await chrome.windows.getAll()).some(w=>w.incognito)) {
+    await chrome.storage.session.remove(['privateInit','privateRestoring']);
   }
 });
-
-chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
-
-chrome.runtime.onInstalled.addListener(async () => {
-  const {auto_save = false} = await chrome.storage.local.get({auto_save: false});
+chrome.action.onClicked.addListener(()=>chrome.runtime.openOptionsPage());
+chrome.runtime.onInstalled.addListener(async()=>{
+  const {auto_save=false}=await chrome.storage.local.get({auto_save:false});
   await chrome.storage.local.set({auto_save});
 });
