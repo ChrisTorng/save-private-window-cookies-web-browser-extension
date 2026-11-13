@@ -1,34 +1,35 @@
-<!DOCTYPE html>
-<html>
-<head>
-	<meta charset="utf-8">
-	<style>
-	@media (prefers-color-scheme: dark) {
-		body {
-			background-color: black;
-			color: white;
-		}
-	}
-	</style>
-</head>
-<body>
-	<form>
-		<p id="warning"></p>
-		<p>
-			<button type="button" id="save">Save cookies from private windows</button>
-		</p>
-		<p>
-			<label><input type="checkbox" id="auto_save"> Save automatically</label>
-		</p>
-		<p>
-			<button type="button" id="delete">Delete stored cookies</button>
-		</p>
-		<p>
-			<button type="button" id="backup">Backup</button><button type="button" id="restore" style="margin-left: 12px;">Restore</button>
-			<input type="file" accept=".json" id="file_input" style="display: none;">
-		</p>
-		<p>Storage space used: <span id="storage_space_used">0</span> KB</p>
-	</form>
-	<script src="options.js"></script>
-</body>
-</html>
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root{color-scheme:light dark} body{font:14px system-ui,sans-serif;max-width:760px;padding:14px;line-height:1.6}
+button{margin:4px;padding:5px}#warning{color:#ba4646;font-weight:700}
+#status{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #8886;padding:10px}
+.small{font-size:12px;opacity:.8}</style></head><body>
+<h2>InPrivate Cookie Backup - Diagnostics</h2>
+<p id="warning"></p>
+<p><button id="save">1. Save live cookies now</button>
+<label><input type="checkbox" id="auto_save"> Save automatically</label></p>
+<p><button id="verify">2. Verify saved vs live cookies</button>
+<button id="restore_saved">3. Restore saved cookies</button></p>
+<p><button id="backup">Export backup JSON (refresh first)</button>
+<button id="restore">Import backup JSON and restore</button>
+<input id="file_input" type="file" accept=".json" hidden></p>
+<p><button id="delete">Delete stored backup only</button>
+<button id="refresh">Refresh diagnostics</button></p>
+<p>Stored: <strong id="cookie_count">-</strong> cookies;
+storage: <span id="storage_space_used">-</span> KB;
+InPrivate cookie store: <span id="store_id">-</span></p>
+<h3>Last result (cookie values never shown)</h3><pre id="status">-</pre>
+<p class="small">A successful readback only proves cookie restoration, NOT website sign-in.
+This extension cannot restore localStorage, IndexedDB, memory-only authentication tokens,
+or server-revoked sessions. Partitioned cookies may not appear in a standard getAll result.
+Backups are stored unencrypted in your extension profile; exported JSON files may contain
+active credentials. Do not share these files.</p>
+
+<h3>Discord InPrivate storage audit (read-only)</h3>
+<p><button id="storage_probe">Inspect active Discord tab's storage availability</button>
+<button id="storage_baseline">Save baseline counts</button>
+<button id="storage_clear_baseline">Clear baseline</button></p>
+<pre id="storage_probe_output">No storage probe recorded</pre>
+<p class="small">Only API availability, record counts, approximate storage size and page state are recorded.
+No keys, values, Discord tokens, Authorization headers, messages, or request bodies are read.
+Use Inspect, Save baseline, reload Discord (or close/reopen InPrivate), then Inspect again.</p>
+<script src="options.js"></script></body></html>

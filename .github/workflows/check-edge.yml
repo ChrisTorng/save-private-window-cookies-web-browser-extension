@@ -1,0 +1,27 @@
+name: Validate Edge extension
+on:
+  push:
+    branches:
+      - fix/edge-incognito-mv3
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JavaScript and manifest
+        run: |
+          node --check background.js
+          node --check options.js
+          python3 -m json.tool manifest.json >/dev/null
+          node .github/tests/options-status.cjs
+      - name: Create Edge extension package
+        run: |
+          mkdir -p dist/edge
+          cp manifest.json background.js options.js options.html dist/edge/
+          cp -r icons dist/edge/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Edge-InPrivate-Cookies-1.3.4
+          path: dist/edge/
+          retention-days: 30
