@@ -1,34 +1,22 @@
 <!DOCTYPE html>
-<html>
-<head>
-	<meta charset="utf-8">
-	<style>
-	@media (prefers-color-scheme: dark) {
-		body {
-			background-color: black;
-			color: white;
-		}
-	}
-	</style>
-</head>
-<body>
-	<form>
-		<p id="warning"></p>
-		<p>
-			<button type="button" id="save">Save cookies from private windows</button>
-		</p>
-		<p>
-			<label><input type="checkbox" id="auto_save"> Save automatically</label>
-		</p>
-		<p>
-			<button type="button" id="delete">Delete stored cookies</button>
-		</p>
-		<p>
-			<button type="button" id="backup">Backup</button><button type="button" id="restore" style="margin-left: 12px;">Restore</button>
-			<input type="file" accept=".json" id="file_input" style="display: none;">
-		</p>
-		<p>Storage space used: <span id="storage_space_used">0</span> KB</p>
-	</form>
-	<script src="options.js"></script>
-</body>
-</html>
+<html><head><meta charset="utf-8"><style>
+:root{color-scheme:light dark}body{font:14px system-ui,sans-serif;padding:12px;max-width:680px}
+button{margin:3px}#warning{font-weight:bold;color:#a55}
+#status{white-space:pre-wrap;word-break:break-word;font-size:12px}
+</style></head><body>
+<p id="warning"></p>
+<p><button type="button" id="save">Save cookies from InPrivate now</button>
+<label><input type="checkbox" id="auto_save"> Save automatically</label></p>
+<p><button type="button" id="delete">Delete stored backup</button>
+<button type="button" id="backup">Export JSON</button>
+<button type="button" id="restore">Import and restore JSON</button>
+<button type="button" id="refresh">Refresh diagnostics</button>
+<input type="file" accept=".json" id="file_input" hidden></p>
+<p>Stored cookies: <span id="cookie_count">-</span>,
+storage: <span id="storage_space_used">-</span> KB,
+InPrivate store ID: <span id="store_id">-</span></p>
+<h3>Last operation (no cookie values displayed)</h3><pre id="status">-</pre>
+<p><small>Cookie backups are stored persistently in chrome.storage.local.
+They are not encrypted by this extension. Import/restore may require reloading site tabs.
+Partitioned cookies (CHIPS) are not fully backed up by getAll without known partition keys.</small></p>
+<script src="options.js"></script></body></html>
