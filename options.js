@@ -1,4 +1,71 @@
 const $=id=>document.getElementById(id);
+
+async function runDiscordStorageProbe(){
+  if(!await chrome.extension.isAllowedIncognitoAccess())
+    throw Error('Enable Allow in InPrivate in extension Details');
+  const tabs=await chrome.tabs.query({incognito:true});
+  const discordTabs=tabs.filter(t=>/^https:\/\/(www\.)?discord\.com\//.test(t.url||''));
+  if(!discordTabs.length)
+    throw Error('Open a Discord page (https://discord.com/) inside InPrivate first');
+  const selected=discordTabs.find(t=>t.active)||discordTabs[0];
+  // Only metadata comes back; never read keys, values, credentials, or network headers.
+  async function metadataOnly(){
+    const inspect=name=>{
+      try{
+        const v=globalThis[name];
+        if(v==null)return {type:typeof v,accessible:false};
+        return {type:typeof v,accessible:true,entryCount:Number(v.length)};
+      }catch(e){return {accessible:false,errorName:e.name};}
+    };
+    let databases={accessible:false};
+    try{
+      if(globalThis.indexedDB){
+        const ds=await globalThis.indexedDB.databases();
+        databases={accessible:true,databaseCount:ds.length};
+      }
+    }catch(e){databases={accessible:false,errorName:e.name};}
+    let usage={accessible:false};
+    try{
+      if(globalThis.navigator?.storage?.estimate){
+        const x=await globalThis.navigator.storage.estimate();
+        usage={accessible:true,usageBytes:x.usage??null,quotaBytes:x.quota??null};
+      }
+    }catch(e){usage={accessible:false,errorName:e.name};}
+    return {
+      readyState:document.readyState,visibilityState:document.visibilityState,
+      localStorage:inspect('localStorage'),sessionStorage:inspect('sessionStorage'),
+      indexedDB:databases,storageEstimate:usage
+    };
+  }
+  async function inject(world){
+    try{
+      const result=await chrome.scripting.executeScript({
+        target:{tabId:selected.id},world,func:metadataOnly
+      });
+      return result[0]?.result||{errorName:'No result'};
+    }catch(e){return {errorName:e.name||'Error'};}
+  }
+  const entry={
+    capturedAt:Date.now(),tabId:selected.id,
+    pageHost:new URL(selected.url).hostname,
+    mainWorld:await inject('MAIN'),isolatedWorld:await inject('ISOLATED')
+  };
+  await chrome.storage.local.set({discord_probe_last:entry});
+}
+function formatStorageProbe(last,baseline){
+  if(!last&&!baseline)return 'No storage probe recorded';
+  const result={last,lastBaseline:baseline||null};
+  if(last&&baseline){
+    const count=(x,w,k)=>x?.[w]?.[k]?.entryCount??null;
+    result.delta={
+      mainLocalStorage:count(last,'mainWorld','localStorage')-count(baseline,'mainWorld','localStorage'),
+      mainSessionStorage:count(last,'mainWorld','sessionStorage')-count(baseline,'mainWorld','sessionStorage'),
+      oldAt:baseline.capturedAt,newAt:last.capturedAt
+    };
+  }
+  return JSON.stringify(result,null,2);
+}
+
 let downloadId=null, objectUrl=null;
 async function privateStore(){
   const wins=(await chrome.windows.getAll({populate:true})).filter(w=>w.incognito);
@@ -85,8 +152,8 @@ async function refresh(){
   const allowed=await chrome.extension.isAllowedIncognitoAccess();
   const access=await chrome.permissions.contains({origins:['<all_urls>']});
   const storeId=allowed?await privateStore():null;
-  const {auto_save=false,cookies=[],last_status}=await chrome.storage.local.get({
-    auto_save:false,cookies:[],last_status:null});
+  const {auto_save=false,cookies=[],last_status,discord_probe_last=null,discord_probe_baseline=null}=await chrome.storage.local.get({
+    auto_save:false,cookies:[],last_status:null,discord_probe_last:null,discord_probe_baseline:null});
   $('auto_save').checked=auto_save;
   $('auto_save').disabled=!(allowed&&access);
   $('save').disabled=!(allowed&&access&&storeId);
@@ -101,6 +168,7 @@ async function refresh(){
   $('storage_space_used').textContent=(new TextEncoder().encode(JSON.stringify(cookies)).length/1024).toFixed(2);
   $('store_id').textContent=storeId||'-';
   $('status').textContent=last_status?JSON.stringify(last_status,null,2):'No operations recorded';
+  $('storage_probe_output').textContent=formatStorageProbe(discord_probe_last,discord_probe_baseline);
 }
 $('save').addEventListener('click',()=>runWithStatus(saveLive));
 $('auto_save').addEventListener('change',e=>runWithStatus(async()=>{
@@ -142,6 +210,22 @@ $('file_input').addEventListener('change',()=>runWithStatus(async()=>{
   await restore(cookies);
   $('file_input').value='';
 }));
+
+$('storage_probe').addEventListener('click',()=>runWithStatus(async()=>{
+  await runDiscordStorageProbe();
+  await chrome.storage.local.set({last_status:{operation:'read-only Discord storage probe',time:Date.now()}});
+}));
+$('storage_baseline').addEventListener('click',()=>runWithStatus(async()=>{
+  const {discord_probe_last=null}=await chrome.storage.local.get({discord_probe_last:null});
+  if(!discord_probe_last)throw Error('Run Inspect first');
+  await chrome.storage.local.set({discord_probe_baseline:discord_probe_last,
+    last_status:{operation:'set Discord probe baseline',time:Date.now()}});
+}));
+$('storage_clear_baseline').addEventListener('click',()=>runWithStatus(async()=>{
+  await chrome.storage.local.remove('discord_probe_baseline');
+  await chrome.storage.local.set({last_status:{operation:'clear Discord probe baseline',time:Date.now()}});
+}));
+
 $('refresh').addEventListener('click',refresh);
 chrome.storage.onChanged.addListener(()=>void refresh());
 document.addEventListener('DOMContentLoaded',refresh);

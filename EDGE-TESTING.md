@@ -1,4 +1,4 @@
-# Edge MV3 diagnostic build (v1.3.3)
+# Edge MV3 diagnostic build (v1.3.4)
 
 **Purpose:** distinguish Cookie API failures from websites that authenticate using other
 storage or memory. Does **not** capture Discord authentication tokens or localStorage.
@@ -60,7 +60,7 @@ storage or memory. Does **not** capture Discord authentication tokens or localSt
 - If `auto_save` overwrites your old good snapshot, use **Import backup JSON**
   and disable automatic saving while investigating.
 
-## v1.3.3: Fix missing Last result in Options UI
+## v1.3.4: Fix missing Last result in Options UI
 
 Previously, Options called `chrome.storage.local.get({auto_save:false,cookies:[]})`.
 This requests only those two keys, so `last_status` was always undefined even
@@ -71,3 +71,25 @@ simulates the key-selection behavior of the Chrome Storage API.
 It is expected that extension Options may open in a regular Edge window when
 invoked from InPrivate: Chrome/Edge extension's default spanning mode shares
 extension storage and allows access to the InPrivate cookie store once permitted.
+
+## v1.3.4: Discord metadata-only probe
+
+Adds **Inspect active Discord tab's storage availability**. The button injects
+a read-only script into the current InPrivate Discord tab using Chrome's MAIN
+and ISOLATED worlds, then compares: localStorage available/entryCount,
+sessionStorage available/entryCount, IndexedDB databaseCount,
+StorageManager usageBytes/quotaBytes, readyState, and visibilityState.
+
+For before/after comparison: click **Inspect**, then **Save baseline counts**,
+reload the Discord page or close/reopen all InPrivate windows, and click
+**Inspect** again. Differences are shown; absence of counts is reported.
+
+**Privacy constraints:** The probe does not enumerate storage keys or read
+storage values, authentication tokens, network headers, or web request bodies.
+It does not inject credentials or attempt Discord sign-in restoration.
+The additional `scripting` permission is needed only for this explicit
+read-only probe. The extension still declares host access for all sites
+for its pre-existing cookie functionality.
+
+This is a diagnostic test, not a solution for sites keeping login
+credentials in JavaScript memory or invalidating sessions server-side.

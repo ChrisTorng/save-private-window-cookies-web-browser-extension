@@ -32,6 +32,13 @@ const chrome={
    remove:async(key)=>{delete stored[key];}},
    session:{set:async()=>{}},
    onChanged:{addListener:()=>{}}},
+ scripting:{executeScript:async({world})=>[{result:{
+   readyState:'complete',visibilityState:'visible',
+   localStorage:{accessible:true,entryCount:12},sessionStorage:{accessible:true,entryCount:2},
+   indexedDB:{accessible:true,databaseCount:4},
+   storageEstimate:{accessible:true,usageBytes:1234,quotaBytes:500000}
+ }}]},
+ tabs:{query:async()=>[{id:42,incognito:true,active:true,url:'https://discord.com/channels/@me'}]},
  downloads:{onChanged:{addListener:()=>{}},download:async()=>1}
 };
 vm.runInNewContext(fs.readFileSync('options.js','utf8'),
@@ -46,5 +53,10 @@ vm.runInNewContext(fs.readFileSync('options.js','utf8'),
   await el('restore_saved').click();
   assert.equal(stored.last_status.operation,'manual restore');
   assert.match(el('status').textContent,/manual restore/);
-  console.log('PASS: Options displays previous, Verify and Restore results');
+  await el('storage_probe').click();
+  assert.equal(stored.last_status.operation,'read-only Discord storage probe');
+  assert.equal(stored.discord_probe_last.mainWorld.localStorage.entryCount,12);
+  assert.match(el('storage_probe_output').textContent,/databaseCount/);
+  assert.doesNotMatch(el('storage_probe_output').textContent,/SECRET_TOKEN_DO_NOT_LOG/);
+  console.log('PASS: Options displays previous, Verify, Restore, and privacy-preserving Discord metadata');
 })().catch(e=>{console.error(e);process.exitCode=1;});

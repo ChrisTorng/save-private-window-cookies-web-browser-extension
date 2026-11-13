@@ -23,4 +23,13 @@ This extension cannot restore localStorage, IndexedDB, memory-only authenticatio
 or server-revoked sessions. Partitioned cookies may not appear in a standard getAll result.
 Backups are stored unencrypted in your extension profile; exported JSON files may contain
 active credentials. Do not share these files.</p>
+
+<h3>Discord InPrivate storage audit (read-only)</h3>
+<p><button id="storage_probe">Inspect active Discord tab's storage availability</button>
+<button id="storage_baseline">Save baseline counts</button>
+<button id="storage_clear_baseline">Clear baseline</button></p>
+<pre id="storage_probe_output">No storage probe recorded</pre>
+<p class="small">Only API availability, record counts, approximate storage size and page state are recorded.
+No keys, values, Discord tokens, Authorization headers, messages, or request bodies are read.
+Use Inspect, Save baseline, reload Discord (or close/reopen InPrivate), then Inspect again.</p>
 <script src="options.js"></script></body></html>
